@@ -1,0 +1,46 @@
+---
+title: "spaghetti_example"
+format: html
+editor: visual
+---
+
+## Spaghetti Plot w/ Simple Group Averages
+
+```{r}
+library(lme4)
+library(tidyverse)
+library(effects)
+data("ChickWeight")
+
+ChickWeight %>%
+  ggplot(., aes(y=weight,x=Time,col=Diet,group=Chick))+
+  geom_line() + 
+  stat_summary(fun="mean",geom="line",
+               aes(group=Diet,y=weight,linetype=Diet),
+               col="black",
+               size = 0.75) +
+  facet_grid(.~Diet)
+
+
+```
+
+## Spaghetti Plot w/ Interaction Effect and Average Slope by Group
+
+```{r}
+
+mod_chick<-lmer(weight~Time*Diet+(1|Chick),
+                data=ChickWeight)
+
+prediction_mod<-effect(c('Time*Diet'),
+       mod_chick) %>%
+  data.frame()
+
+ggplot(ChickWeight,aes(x=Time,y=weight,group=Chick,col=Diet))+
+  geom_line() +
+  geom_line(data = prediction_mod, aes(x=Time,y=fit,group=Diet,linetype=Diet),
+            col='black',
+            size = 0.75)+
+  facet_grid(.~Diet)
+
+  
+```

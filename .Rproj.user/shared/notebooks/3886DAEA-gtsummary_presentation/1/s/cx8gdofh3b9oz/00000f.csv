@@ -1,0 +1,11 @@
+"0","tbl_strata(trial,
+    strata = trt,
+    .tbl_fun = ~.x %>% 
+        tbl_summary(by=stage, missing = ""ifany"") %>%
+        add_p() %>%
+        bold_p()
+) %>% add_p()
+"
+"2","Error in UseMethod(""add_p"") : 
+  no applicable method for 'add_p' applied to an object of class ""c('tbl_strata', 'tbl_merge', 'gtsummary')""
+"

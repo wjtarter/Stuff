@@ -1,0 +1,201 @@
+---
+title: "Alluvial Plot Presentation"
+author: "Wyatt Tarter"
+date: '2022-07-11'
+output: beamer_presentation
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(ggalluvial)
+library(here)
+load(here("alluvial_plots.Rdata"))
+
+set.seed(1001)
+N <- 300
+trialno <- sample(c(1000:2000), N)
+exc1 <- rep(NA, N)
+exc1[sample(1:N, 15)] <- sample(c("Sample not collected", "MRI not collected",
+                                  "Other"), 15, replace = T, prob = c(0.4, 0.4, 0.2))
+
+induc <- rep(NA, N)
+induc[is.na(exc1)] <- trialno[is.na(exc1)]
+
+exc2 <- rep(NA, N)
+exc2[sample(1:N, 20)] <- sample(c("Sample not collected", "Dead",
+                                  "Other"), 20, replace = T, prob = c(0.4, 0.4, 0.2))
+exc2[is.na(induc)] <- NA
+
+exc <- ifelse(is.na(exc2), exc1, exc2)
+
+arm <- rep(NA, N)
+arm[is.na(exc)] <- sample(c("Conc", "Seq"), sum(is.na(exc)), replace = T)
+arm3 <- sample(c("Trt A", "Trt B", "Trt C"), N, replace = T)
+arm3[is.na(arm)] <- NA
+
+fow1 <- rep(NA, N)
+fow1[!is.na(arm)] <- sample(c("Withdraw", "Discontinued", "Death", "Other", NA),
+                            sum(!is.na(arm)), replace = T, 
+                            prob = c(0.05, 0.05, 0.05, 0.05, 0.8))
+fow2 <- rep(NA, N)
+fow2[!is.na(arm) & is.na(fow1)] <- sample(c("Protocol deviation", "Outcome missing", NA),
+                                          sum(!is.na(arm) & is.na(fow1)), replace = T, 
+                                          prob = c(0.05, 0.05, 0.9))
+
+
+df <- data.frame(trialno, exc1, induc, exc2, exc, arm, arm3, fow1, fow2)
+rm(trialno, exc1, induc, exc2, exc, arm, arm3, fow1, fow2, N)
+
+```
+
+
+## Simple Example
+
+```{r}
+
+data("mtcars")
+mtcars %>%
+  count(am,gear,carb) %>%
+  ggplot(., aes(y=n,
+                axis1 = am,
+                axis2 = gear,
+                axis3 = carb))+
+  geom_alluvium(aes(fill=factor(carb)))+
+  geom_stratum() +
+  geom_label(stat="stratum",
+             aes(label=after_stat(stratum)))+
+  scale_x_discrete(limits=c("AM","Gear","Carb"),
+                   expand = c(0.05,0.05))+
+  scale_y_continuous(breaks=c(seq(0,30,by=5)))+
+  labs(fill="Carburetor #")+
+  ylab(label="Frequency")+
+  coord_flip()
+
+```
+
+## NA Consort Flow Example
+
+```{r,fig.height=8,warning=F}
+
+
+df %>% 
+  mutate(exc = replace_na(exc,"Enrolled"),
+         exc = factor(exc),
+         exc = fct_relevel(exc,"Other","Dead","Enrolled"),
+         fow2 = replace(fow2,is.na(fow2) & !is.na(arm3),"Included in Final Analysis"))%>%
+  count(exc,arm3,fow2) %>%
+  ggplot(., aes(y=n,
+                axis1=exc,
+                axis2=arm3,
+                axis3=fow2))+
+  geom_alluvium(aes(fill=arm3))+
+  geom_stratum()+
+  geom_label(stat="stratum",
+             aes(label=after_stat(stratum)))+
+  scale_x_discrete(limits=c("Excluded","Allocation","Final-analysis"),
+                   expand = c(0.1,0.1))+
+  labs(title="Consort Flow Diagram",
+       fill="Treatment Arm Allocation")+
+  theme_bw()
+```
+
+
+## NA Geom Flow Data example
+
+```{r}
+data(majors)
+majors %>% 
+mutate(curriculum = as.factor(curriculum)) %>%
+ggplot(.,aes(x = semester, 
+             stratum = curriculum, 
+             alluvium = student,
+             fill = curriculum, 
+             label = curriculum)) +
+  geom_flow(stat = "alluvium", 
+            lode.guidance = "frontback",
+            color = "darkgray") +
+  geom_stratum() +
+  theme(legend.position = "bottom") +
+  ggtitle("student curricula across several semesters")
+
+```
+
+## Another Geom Flow Example
+
+```{r}
+data(vaccinations)
+vaccinations %>% 
+mutate(response = factor(response, rev(levels(response)))) %>%
+ggplot(.,
+       aes(x = survey, 
+           stratum = response, 
+           alluvium = subject,
+           y = freq,
+           fill = response, 
+           label = response)) +
+  scale_x_discrete(expand = c(.1, .1)) +
+  geom_flow() +
+  geom_stratum(alpha = .5) +
+  geom_text(stat = "stratum", size = 3) +
+  theme(legend.position = "none") +
+  ggtitle("vaccination survey responses at three points in time")
+```
+
+## Real Example
+
+```{r}
+
+ccp_alluvialplot<-try1%>%
+  count(ccp3_from,ccp3_to)%>%
+  ggplot(.,aes(y=n,axis1=ccp3_from,
+               axis2=ccp3_to))+
+  geom_alluvium(aes(fill=ccp3_from),width=1/7) +
+  geom_stratum(width = 1/6) +
+  geom_label(stat = "stratum", aes(label = after_stat(stratum)))+
+  scale_x_discrete(limits=c("From","To"),expand=c(0.05,0.05))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  labs(title="CCP3 Level Transitions")
+
+ccp_alluvialplot
+
+```
+
+
+## Examples Cont. 
+
+```{r}
+rf_alluvialplot<-try1%>%
+  count(rf_cat_from,rf_cat_to)%>%
+  ggplot(.,aes(y=n,
+               axis1=rf_cat_from,
+               axis2=rf_cat_to))+
+  geom_alluvium(aes(fill=rf_cat_from)) +
+  geom_stratum() +
+  geom_label(stat = "stratum", aes(label = after_stat(stratum)))+
+  scale_x_discrete(limits=c("From","To"),expand=c(0.05,0.05))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  labs(title="RF Category Transitions")
+
+ccp_rf_alluvialplot<-try1%>%
+  count(ccp_rf_cat_from,ccp_rf_cat_to)%>%
+  mutate(ccp_rf_cat_from=fct_relevel(ccp_rf_cat_from,
+                                     "A+M+; CCP3 <60"))%>%
+  ggplot(.,aes(y=n,
+               axis1=ccp_rf_cat_from,
+               axis2=ccp_rf_cat_to))+
+  geom_alluvium(aes(fill=ccp_rf_cat_from)) +
+  geom_stratum() +
+  geom_label(stat = "stratum", aes(label = after_stat(stratum)))+
+  scale_x_discrete(limits=c("From","To"),
+                   expand=c(0.05,0.05))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  labs(title="RF Category and CCP3 Level Transitions")
+
+ccp_rf_alluvialplot
+rf_alluvialplot
+```
+

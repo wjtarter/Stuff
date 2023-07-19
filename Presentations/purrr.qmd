@@ -1,0 +1,178 @@
+---
+title: "Purrr (not like a cat tho)"
+author: "Wyatt Tarter"
+format: revealjs
+editor: visual
+---
+
+## Purrr {.smaller}
+
+Purrr, at the core, just takes something (elements of a vector, columns of a data frame, vectors in a list), and performs a specified function. The syntax is somewhat straightforward when you play around with it. For us statisticians, it is perhaps somewhat unnecessary if you are already know how to use for loops, apply's, or across, but I wanted to present what I know on it since it feels more straightforward.
+
+![](images/image-1366559423.png){width="559"}
+
+```{r}
+library(tidyverse)
+library(purrr)
+library(broom)
+library(rattle)
+data("weather")
+weather2 <- weather %>% select(-Date,-Location)
+```
+
+## Iterative Options {.smaller}
+
+There are a handful of options to iterate a function across lists in R
+
+-   The tried and true for loop
+-   Using one of the apply functions (lapply, sapply, apply, and tapply)
+-   Using map from purrr (aka the point of this talk)
+
+## Basics of Purrr {.smaller}
+
+-   map
+
+    -   takes a vector and function, outputs function applied to each element in a list
+
+    -   map *can* take non vector inputs (e.g. a data frame or tibble), but the output will be a list
+
+    -   subvariants of map_lgl, map_int, map_dbl, map_chr
+
+-   modify
+
+    -   modify outputs the same data type as the input
+
+    -   So, input a data frame, get a data frame out (as opposed to a list with map)
+
+-   map2
+
+    -   Takes *two* inputs and a function
+
+    -   So, if you have two lists and want to apply the same function to both in tandem
+
+-   walk
+
+    -   This apparently does nothing but is useful if you don't want output showing up
+
+## Basic Purrr Examples
+
+```{r}
+#| echo: true
+triple <- function(x) x * 3
+map(1:3, triple)
+
+
+map_lgl(weather2, is_integer)
+
+
+```
+
+## Basic Purrr Examples Continued
+
+```{r}
+#| echo: true
+
+map_int(weather2, ~length(unique(.x)))
+
+map_dbl(mtcars, mean)
+
+```
+
+## Basic Purrr Examples Continued
+
+```{r}
+#| echo: true
+
+by_cyl <- split(mtcars, mtcars$cyl)
+
+by_cyl %>% 
+  map(~ lm(mpg ~ wt, data = .x)) %>%
+  map(coef) %>%
+  map_dbl(2) #picks second position from list
+```
+
+## For Loop and Lapply Regression Examples
+
+```{r}
+#| echo: true
+variables <- setdiff(names(weather2), c("row_id", "level"))
+
+modelsFor <- list()
+for (var in variables) {
+  modelsFor[[var]] = glm(as.formula(paste0("RainTomorrow ~ ", var)),
+                      data = weather2,
+                      family = "binomial") 
+}
+
+modelsLapply <- lapply(variables, 
+                       function(x) glm(as.formula(paste0("RainTomorrow ~", x)),
+                                      data = weather2,
+                                      family = "binomial")
+                       )
+```
+
+## Purrr Regression Example
+
+```{r}
+#| echo: true
+
+modelsPurrr <- weather2 %>%
+  select(-RainTomorrow) %>%
+  map(~ glm(RainTomorrow ~ .x, family = "binomial", data = weather2) ) 
+
+modelsPurrr %>%
+  map(tidy) %>%
+  head(5)
+
+```
+
+## Purrr Regression Example Continued
+
+```{r}
+#| echo: true
+
+weather2 %>%
+  select(-RainTomorrow) %>%
+  map( ~ glm(RainTomorrow ~ .x, family = "binomial", data = weather2) ) %>%
+  map(broom::tidy) %>%
+  map(filter, term != "(Intercept)") %>%
+  map(select, -term) %>%
+  bind_rows( .id = "term") %>%
+  head(3)
+
+
+
+```
+
+## Purrr Regression Example Continued 2
+
+```{r}
+#| echo: true
+
+colnames(weather2) %>%
+  setdiff("RainTomorrow") %>%
+  rlang::syms() %>%
+  map( ~rlang::expr(glm(RainTomorrow ~ !!.x, data=weather2, 
+                        family = "binomial")) ) %>%
+  map(eval.parent) %>%
+  map(broom::tidy) %>%
+  bind_rows() %>%
+  filter(term != "(Intercept)") %>%
+  tail(3)
+
+```
+
+## Reduce {.smaller}
+
+Something that is very nice in purrr is the reduce function: sometimes you wanna do multiple joins all at once, but dplyr requires nested joins which can be difficult to write. Reduce is a neater way of doing multiple joins at once.
+
+```{r}
+#| echo: true
+
+
+x <- data.frame(i = c("a","b","c"), j = 1:3, stringsAsFactors=FALSE)
+y <- data.frame(i = c("b","c","d"), k = 4:6, stringsAsFactors=FALSE)
+z <- data.frame(i = c("c","d","a"), l = 7:9, stringsAsFactors=FALSE)
+
+reduce(list(x,y,z), left_join, by = "i")
+```

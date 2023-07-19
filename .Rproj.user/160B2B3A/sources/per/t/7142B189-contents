@@ -1,0 +1,177 @@
+---
+title: "SWAN - Outcome Prevalence"
+author: "Laura Grau "
+date: "Version Date: 2022-09-12"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, include=FALSE}
+library("tidyverse")
+library(magrittr)
+library("readxl")
+library("pander")
+library("gridExtra")
+library("mstate")
+library('survival')
+library(bestNormalize)
+library(gtsummary) # version 1.3.7.9006
+library(flextable)
+library(haven)
+library("kableExtra")
+library(arsenal)
+require(knitr)
+require(survival)
+
+```
+
+
+```{r load processed data, include=FALSE , echo=FALSE}
+df<-read_sas("P:/BRANCHES/ObGyn/OBGYN_Santoro_SWAN/DataProcessed/Analysis/Datasets created by Lala/outcomes.sas7bdat")
+
+df$`Menopause Stage` <- factor(df$menopause, levels = c(0,1,2,3), labels = c("Pre","Early Peri","Late Peri","Post"))
+
+df$`IC History` <- factor(df$hx_inf_child, levels = c(0,1,2), labels = c("Neither infertility nor IC","Involuntary Childlessness (IC)", "Infertility but not IC"))
+
+#Anxiety
+df$CESD <-factor(df$sex_imp, levels = c(0,1), labels = c("No","Yes"))
+df$`Anxiety`<-factor(df$anxiety_binary, levels = c(0,1), labels = c("No","Yes"))
+df$`Perceived Stress (>=7)`<-factor(df$pstress_gte7, levels = c(0,1), labels = c("No","Yes"))
+
+#Sexual Outcomes
+df$`Sex - Desire`<-factor(df$sex_desire, levels = c(0,1), labels = c("Less than once per week","Once or more per week"))
+df$`Sex - Masturbation`<-factor(df$sex_masturb, levels = c(0,1), labels = c("None","Any"))
+df$`Sex - Engaged`<-factor(df$sex_engaged, levels = c(0,1), labels = c("No","Yes"))
+df$`Sex - Aroused`<-factor(df$sex_aroused, levels = c(0,1), labels = c("Sometimes, almost never, never","Always, almost always"))
+df$`Sex - Ability to Climax`<-factor(df$sex_climax, levels = c(0,1), labels = c("Almost never, never","Always, almost always, sometimes"))
+df$`Sex - Pelvic`<-factor(df$sex_pelvic, levels = c(0,1), labels = c("Almost never, never","Always, almost always, sometimes"))
+df$`Sex - Importance`<-factor(df$sex_imp, levels = c(0,1), labels = c("Not very to not at all important","Moderately to Extremely Important"))
+
+
+#Sleep
+df$`Sleep Disturbance`<-factor(df$slepbin, levels = c(0,1), labels = c("No","Yes"))
+
+#Vaginal Symptoms
+
+df$`Vaginal - Discharge`<-factor(df$vagdishb, levels = c(0,1), labels = c("None","Any"))
+df$`Vaginal - Dryness`<-factor(df$vagindrb, levels = c(0,1), labels = c("None","Any"))
+df$`Vaginal - Irritation`<-factor(df$vagirrtb, levels = c(0,1), labels = c("None","Any"))
+df$`Vaginal - Soreness`<-factor(df$vagsoreb, levels = c(0,1), labels = c("None","Any"))
+
+#Vasomotor Symptoms
+df$`Any VMS`<-factor(df$vmsany, levels = c(0,1), labels = c("None","Any"))
+df$`Frequent VMS`<-factor(df$vmsfreq, levels = c(0,1), labels = c("Not Frequent","Frequent"))
+
+		
+#Label menopause for last table
+df$`Menopausal Stage`<-factor(df$menopause, levels = c(0,1,2,3), labels = c("Pre","Early Peri", "Late Peri","Post"))
+
+
+#Create one dataframe per menopausal stage
+pre<-subset(df, menopause==0)
+early<-subset(df, menopause==1)
+late<-subset(df, menopause==2)
+post<-subset(df,menopause==3)
+```
+
+
+
+#Overall - Across all Menopausal Stages
+```{r, results='asis'}
+
+#Overall -- All menopausal stages
+tab1<-tableby(`IC History`~ CESD+`Anxiety`+`Perceived Stress (>=7)`+ `Sex - Aroused`+ `Sex - Ability to Climax`+`Sex - Desire`+`Sex - Engaged`+ `Sex - Importance`+`Sex - Masturbation`+`Sex - Pelvic`+`Sleep Disturbance` +`Vaginal - Discharge` +`Vaginal - Dryness`+`Vaginal - Irritation`+`Vaginal - Soreness` +`Any VMS`+`Frequent VMS` ,digits.count=0, digits.pct=1, digits=1,test=FALSE, data=df)
+
+
+summary(tab1, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+```
+
+
+
+#Table stratified by Menopausal Stage - Pre-menopause
+```{r, results='asis'}
+
+#Overall -- All menopausal stages
+tab1_pre<-tableby(`IC History`~ CESD+`Anxiety`+`Perceived Stress (>=7)`+ `Sex - Aroused`+ `Sex - Ability to Climax`+`Sex - Desire`+`Sex - Engaged`+ `Sex - Importance`+`Sex - Masturbation`+`Sex - Pelvic`+`Sleep Disturbance` +`Vaginal - Discharge` +`Vaginal - Dryness`+`Vaginal - Irritation`+`Vaginal - Soreness` +`Any VMS`+`Frequent VMS` ,digits.count=0, digits.pct=1, digits=1,test=FALSE, data=pre)
+
+
+summary(tab1_pre, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+```
+
+
+#Table stratified by Menopausal Stage - Early perimenopause
+```{r, results='asis'}
+
+#Overall -- All menopausal stages
+tab1_early<-tableby(`IC History`~ CESD+`Anxiety`+`Perceived Stress (>=7)`+ `Sex - Aroused`+ `Sex - Ability to Climax`+`Sex - Desire`+`Sex - Engaged`+ `Sex - Importance`+`Sex - Masturbation`+`Sex - Pelvic`+`Sleep Disturbance` +`Vaginal - Discharge` +`Vaginal - Dryness`+`Vaginal - Irritation`+`Vaginal - Soreness` +`Any VMS`+`Frequent VMS` ,digits.count=0, digits.pct=1, digits=1,test=FALSE, data=early)
+
+
+summary(tab1_early, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+```
+
+#Table stratified by Menopausal Stage - Late perimenopause
+```{r, results='asis'}
+
+#Overall -- All menopausal stages
+tab1_late<-tableby(`IC History`~ CESD+`Anxiety`+`Perceived Stress (>=7)`+ `Sex - Aroused`+ `Sex - Ability to Climax`+`Sex - Desire`+`Sex - Engaged`+ `Sex - Importance`+`Sex - Masturbation`+`Sex - Pelvic`+`Sleep Disturbance` +`Vaginal - Discharge` +`Vaginal - Dryness`+`Vaginal - Irritation`+`Vaginal - Soreness` +`Any VMS`+`Frequent VMS` ,digits.count=0, digits.pct=1, digits=1,test=FALSE, data=late)
+
+
+summary(tab1_late, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+```
+
+#Table stratified by Menopausal Stage - Postmenopause
+```{r, results='asis'}
+
+#Overall -- All menopausal stages
+tab1_post<-tableby(`IC History`~ CESD+`Anxiety`+`Perceived Stress (>=7)`+ `Sex - Aroused`+ `Sex - Ability to Climax`+`Sex - Desire`+`Sex - Engaged`+ `Sex - Importance`+`Sex - Masturbation`+`Sex - Pelvic`+`Sleep Disturbance` +`Vaginal - Discharge` +`Vaginal - Dryness`+`Vaginal - Irritation`+`Vaginal - Soreness` +`Any VMS`+`Frequent VMS` ,digits.count=0, digits.pct=1, digits=1,test=FALSE, data=post)
+
+
+summary(tab1_post, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+```
+
+```{r}
+library(gtsummary)
+df2<-subset(df, select=-c(ID, hx_inf_child, menopause))
+
+test<-tbl_strata(df2,
+    strata = `IC History`,
+    .tbl_fun = ~.x %>% 
+        tbl_summary(by=`Menopausal Stage`, missing = "ifany")
+) %>% as_kable_extra() %>%
+    kable_classic(full_width=TRUE, latex_options='scale_down')
+
+summary(test, text=TRUE) %>%
+  kable() %>%
+  kable_classic(full_width = TRUE, latex_options="scale_down")
+
+
+
+```
+

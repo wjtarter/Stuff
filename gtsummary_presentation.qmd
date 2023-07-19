@@ -1,0 +1,273 @@
+---
+title: "GTSummmary Presentation"
+author: "Wyatt Tarter"
+format: html
+editor: visual
+---
+
+## GTSummary
+
+Gtsummary is a relatively newish table package with great breadth of features that works with the pipe operator and various other table packages (flextable, kableExtra, knitr, huxtable, specifically builds upon the gt package).
+
+## Syntax
+
+Several base functions that create default tables with minimal input
+
+-   tbl_summary()
+    -   Great for quick, fast, nice looking table 1's that can be edited to your hearts content
+-   tbl_regression()
+    -   Creates quick, fast, nice looking tables to summarize regression models
+
+    -   Also supports survival models, and (admittedly limited support) Bayesian models from the rstanarm and brms packages
+-   tbl_uvregression()
+    -   Creates quick, fast (noticing a theme here?) tables for univariate analysis
+
+## Tbl_summary Example
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(tidyverse)
+library(gtsummary)
+library(survival)
+library(brms)
+library(broom.mixed)
+data("mtcars")
+data("trial")
+
+
+```
+
+```{r}
+#| message: false
+tbl_summary(mtcars)
+```
+
+Can be output to html, pdf (allegedly), or word document interchangeably, with no extra lines of code needed.
+
+## Tbl_summary split example
+
+To create a table one split by a variable, simply specify the by = option within the tbl_summary() call:
+
+```{r}
+#| message: false
+tbl_summary(mtcars, by = cyl)
+
+```
+
+## Tbl_summary example with all the stuff
+
+However, if you want to modify your table, you can use the pipe operator to add in all sorts of handy calls!
+
+```{r}
+#| message: false
+
+theme_gtsummary_eda(set_theme = T)
+tbl_summary(trial, 
+            by = trt,
+            missing = "ifany",
+            missing_text = "Missing",
+            label = grade ~ "Tumor Grade",
+            statistic = list(age~"{median} ({p25},{p75})",
+                             marker ~ "{mean} ({sd})",
+                             all_categorical() ~ "{n}/{N}")) %>%
+    add_p(pvalue_fun = ~ style_pvalue(.x, digits = 2)) %>%
+    add_overall() %>%
+    add_q(method = "fdr") %>%
+    modify_header(label = "**Variables**") %>%
+    bold_labels() %>%
+    italicize_levels() %>%
+    modify_caption("**Table 1.**")
+
+```
+
+In the above chunk, we specify whether to show missing values, change the text for the missing values, specify what statistics to calculate for each individual variable or an entire subtype of variables, add p-values and the number of digits to display, add a multiple comparison adjusted p-value column, an overall column, modify the header, make labels bold or italicized, add an overall caption. We can also set a theme prior to the table (this is the exploratory data analysis theme).
+
+## Tbl_strata example with double stratification
+
+Sometimes you may want to to a double stratified table (maybe split by gender, and within gender split by treatment). I frequently struggle with such tables in other table packages, and usually have to construct them by "hand".
+
+```{r}
+
+#| message: false
+
+tbl_strata(trial,
+    strata = trt,
+    .tbl_fun = ~.x %>% 
+        tbl_summary(by=stage, missing = "ifany") %>%
+        add_p() %>%
+        bold_p()
+)
+
+```
+
+## Tbl_uvregression example
+
+If you ever need to run and summarize a handful of univariate regressions, there is a helpful tbl_uvregression function:
+
+```{r}
+#| message: false
+#| warning: false
+tbl_uvregression(data = trial,
+                 method = glm,
+                 y = death,
+                 method.args = list(family = binomial),
+                 exponentiate = T) %>%
+    bold_p() %>%
+    modify_caption(caption = "Univariate regressions with Death as Outcome") 
+
+```
+
+
+## Tbl_regression example
+
+The regression summaries is probably my favorite part: you can create your model and either pipe it directly into the tbl_regression summary or call it later. Syntax and helper functions are generally the same as tbl_summary():
+
+```{r}
+tbl_a<-glm(mpg~factor(cyl)+wt+factor(vs)+factor(am)+hp,
+    data=mtcars,
+    family = "gaussian") %>%
+    tbl_regression(label = list(`factor(cyl)`~"Cylinder #",
+                                wt~"Weight (1000 lbs)",
+                                `factor(vs)`~"Engine type",
+                                `factor(am)`~"Transmission",
+                                hp~"Horsepower")) %>%
+    bold_p(t=0.05)
+
+tbl_a
+```
+
+Another nice feature is including results in-line with the text, which can be done using the r inline_text(model, variable) command, like so: `r inline_text(tbl_a, variable = wt)` is the estimate for the weight variable.
+
+## Tbl_regression combining multiple models example
+
+One of my most frequent frustrations is creating multiple regressions, and either having to present them separately, or attempting to create a terrible franken-table that looks abjectly horrible. The tbl_merge() function is great since it lets you merge multiple regression tables very easily (or just multiple gtsummary table objects, regardless of type).
+
+Below are two logistic models: one that examines the association between grade, stage, and age, and another that adds in treatment.
+
+```{r}
+
+tbl_1<-glm(death~grade+stage+age,
+           family="binomial",
+           data=trial) %>%
+    tbl_regression(exponentiate=T) %>%
+    bold_p() %>%
+    bold_labels()%>%
+    add_glance_table(AIC)
+
+
+tbl_2<-glm(death~grade+stage+age+trt,
+           family="binomial",
+           data=trial) %>%
+    tbl_regression(exponentiate=T) %>%
+    bold_p() %>%
+    bold_labels() %>%
+    add_glance_table(AIC)
+
+tbl_merge(tbls=list(tbl_1,
+                    tbl_2),
+          tab_spanner = c("No treatment model",
+                             "Treatment model")) %>%
+    modify_header(label = "**Variables**") %>%
+    modify_table_body(
+        ~.x %>% dplyr::arrange(
+            row_type == "glance_statistic"
+        )
+    )
+
+```
+
+You can add in more models (within reason), and it automatically matches up the variables in each row, leaving any that are not in both models blank for the respective model. This also works with a tbl_summary() object in a similar fashion.
+
+We can also stack regression models (or just general gtsummary tables) in a similar fashion:
+
+```{r}
+tbl_3 <-
+  glm(response ~ trt, trial, family = binomial) %>%
+  tbl_regression(
+    exponentiate = TRUE,
+    label = list(trt ~ "Treatment (unadjusted)")
+  ) %>%
+    bold_labels()
+
+tbl_4 <-
+  glm(response ~ trt + grade + stage + marker, trial, family = binomial) %>%
+  tbl_regression(
+    include = "trt",
+    exponentiate = TRUE,
+    label = list(trt ~ "Treatment (adjusted)")
+  ) %>%
+    bold_labels()
+
+tbl_stack(list(tbl_3, tbl_4))
+
+```
+
+## Survival models
+
+The gtsummary can also summarize survival models with the same syntax as tbl_regression, but has a nice helper function for survival probabilities from a survfit object to be displayed as well: 
+
+```{r}
+
+tbl_survfit(
+  survfit(Surv(ttdeath, death) ~ trt, trial),
+  times = c(6, 12,18, 24),
+  label_header = "**{time} Month**"
+) %>%
+    modify_caption("**Surival probabilities based on treatment**")
+
+```
+
+
+## Extra details
+
+There are a few more functions that also seem helpful:
+
+- as_flextable()
+- as_kable()/as_kableExtra()
+- sort_p()/filter_p()
+- add_global_p()/add_vif()
+- add_difference()/add_significance_stars()
+
+## Conclusion
+
+- Gtsummary combines quick and easy table creation with the option for similarly easy modifications. 
+- Plays well with html, pdf, and word docs
+- Also interfaces with other common table packages like kableExtra, flextable, knitr
+- Relatively quick learning curve if you are familiar with the piping operator 
+- Has saved me time on implementation and on updating tables for collaborators, very nice and easy reproduceability
+- Still need to play around with the tests used within add_p() and some more of the finer details
+- Issues with footnote spacing projecting into tables
+- Can use as a base to create tables, modify as needed, and then convert to another table format for even more extra detail
+
+## Bonus Fun: attempt at Bayesian output!
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+mod_bayes<-brm(response ~ trt + grade + stage + marker,
+               trial, 
+               family = bernoulli(link = "logit"),
+               chains = 4,
+               iter = 2000)
+```
+
+```{r}
+#| eval: false
+mod_bayes<-brm(response ~ trt + grade + stage + marker,
+               trial, 
+               family = bernoulli(link = "logit"),
+               chains = 4,
+               iter = 2000)
+```
+
+```{r}
+#| message: false
+#| warning: false
+mod_bayes %>%
+tbl_regression(exponentiate = T) 
+```
+
+Sadly the exponentiate = T does not really work for rstanarm/brms. For Bayesian models, I believe you need to specify the tidy_fun = within the tbl_regression() output and manually create a tidy helper to get more out of the model than the raw estimates and confidence intervals. 
